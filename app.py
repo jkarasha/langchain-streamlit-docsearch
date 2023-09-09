@@ -6,6 +6,9 @@ from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Pinecone
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import RetrievalQA
 #
 _ = load_dotenv(find_dotenv())
 #
@@ -57,7 +60,30 @@ if index_name not in pinecone.list_indexes():
 docsearch = Pinecone.from_existing_index(index_name, embedding_model)
 #
 query = "who is the author of the book?"
-docs = docsearch.similarity_search(query)
+docs = docsearch.similarity_search(query, k=3)
 #
 print(f"Resulting docs: {len(docs)}")
 #
+# Prompt engineering
+llm = ChatOpenAI(
+    model_name="gpt-3.5-turbo",
+    temperature=0.0
+)
+#
+template = """Use the following pieces of context to answer the question at the end.
+If you don't know the answer, just say that you don't know, don't try to make up an answer.
+Use three sentences maximum. Keep the answer as concise as possible. 
+Always say "thanks for asking!" at the end of the answer. 
+{context}
+Question: {question}
+Helpful Answer:"""
+#
+QA_CHAIN_PROMPT = PromptTemplate.from_template(template)
+qa_chain = RetrievalQA.from_chain_type(
+    llm,
+    retriever=docsearch.as_retriever(),
+    return_source_documents=True
+)
+question = "What are rubies?"
+result = qa_chain({"query": question})
+print(result["result"])
